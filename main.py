@@ -19,18 +19,21 @@ RightMotors = MotorGroup(RightMotors_motor_a, RightMotors_motor_b)
 wait(30, MSEC)
 #endregion VEXcode Generated Robot Configuration
 
-Drivetrain = DriveTrain(LeftMotors, RightMotors, 319.19, 295, 40, MM, 1)
+ARM_PID_KP = 10
+ARM_PID_TP = 50
 
-LVel = 0
+drivetrain = DriveTrain(LeftMotors, RightMotors, 319.19, 295, 40, MM, 1)
+
+lVel = 0
 RVel = 0
 
-VoltMultiplier = 12
-SpeedMultiplier = 1
+voltMultiplier = 12
+speedMultiplier = 1
 
-CAxisDrive = 0
-CAxisTurn = 0
+cAxisDrive = 0
+cAxisTurn = 0
 
-IsSwingDriving = True
+isSwingDriving = True
 
 # BLUE=TRUE, RED=FALSE
 alliance = True
@@ -52,12 +55,11 @@ def setupAddonMotor(motorobj, controllerbutton1, controllerbutton2):
     controllerbutton1.pressed(newmotorbutton1)
     controllerbutton2.pressed(newmotorbutton2)
 
-
 # Code to select the autonomous task
 
 def selectSettings():
 
-    global IsSwingDriving, SpeedMultiplier
+    global isSwingDriving, speedMultiplier
 
     # Configure swing driving
 
@@ -80,7 +82,7 @@ def selectSettings():
         wait(10, MSEC)
     
     if (not brain.screen.y_position() > 272 - 40) and brain.screen.x_position() > 240:
-        IsSwingDriving = False
+        isSwingDriving = False
 
     # Configure speed multiplier
 
@@ -105,9 +107,9 @@ def selectSettings():
             wait(15, MSEC)
     
         if brain.screen.x_position() > 240:
-            SpeedMultiplier -= 0.1
+            speedMultiplier -= 0.1
         else:
-            SpeedMultiplier += 0.1
+            speedMultiplier += 0.1
 
         while brain.screen.pressing():
             wait(15, MSEC)
@@ -149,52 +151,52 @@ def brainUserInterface():
 
 # DRIVING ---------------------------------------------------------
 
-def handleDrivetrainDriving():
-    if CAxisTurn > 0:
-        Drivetrain.drive(FORWARD)
-    if CAxisTurn < 0:
-        Drivetrain.drive(REVERSE)
+def handledrivetrainDriving():
+    if cAxisDrive > 0.1:
+        drivetrain.drive(FORWARD)
+    if cAxisDrive < -0.1:
+        drivetrain.drive(REVERSE)
 
-def handleDrivetrainTurning():
-    if CAxisTurn > 0:
-        Drivetrain.turn(RIGHT)
-    if CAxisTurn < 0:
-        Drivetrain.turn(LEFT)
+def handledrivetrainTurning():
+    if cAxisTurn > 0.1:
+        drivetrain.turn(RIGHT)
+    if cAxisTurn < -0.1:
+        drivetrain.turn(LEFT)
 
-def handleDriving():
-    global RVel, LVel
+def handleSwingDriving():
+    global RVel, lVel
     # Driving
-    if CAxisDrive > 0:
-        LVel += 1
+    if cAxisDrive > 0:
+        lVel += 1
         RVel += 1
-    if CAxisDrive < 0:
-        LVel -= 1
+    if cAxisDrive < 0:
+        lVel -= 1
         RVel -= 1
 
 def setVars():
-    global CAxisDrive, CAxisTurn, LVel, RVel
+    global cAxisDrive, cAxisTurn, lVel, RVel
     # Variable updates
-    LVel = 0
+    lVel = 0
     RVel = 0
-    CAxisDrive = controller_1.axis3.position()
-    CAxisTurn = controller_1.axis1.position()
+    cAxisDrive = controller_1.axis3.position()
+    cAxisTurn = controller_1.axis1.position()
 
-def handleTurning():
-    global LVel, RVel
+def handleSwingTurning():
+    global lVel, RVel
     # Turning
-    if (not math.fabs(CAxisDrive) < 0.1):
-        turnRad = -1 * math.fabs(CAxisTurn)
-        if CAxisTurn > 0:
+    if (not math.fabs(cAxisDrive) < 0.1):
+        turnRad = -1 * math.fabs(cAxisTurn)
+        if cAxisTurn > 0:
             RVel += turnRad
-        if CAxisTurn < 0:
-            LVel += turnRad
+        if cAxisTurn < 0:
+            lVel += turnRad
     else:
-        if CAxisTurn > 0:
+        if cAxisTurn > 0:
             RVel -= 1
-            LVel += 1
-        if CAxisTurn < 0:
+            lVel += 1
+        if cAxisTurn < 0:
             RVel += 1
-            LVel -= 1
+            lVel -= 1
 
 # CONTROL FUNCTIONS ----------------------------------------------
 
@@ -209,16 +211,20 @@ def movementControl():
 
         setVars()
 
-        if IsSwingDriving:
-            handleDriving()
-            handleTurning()
+        if isSwingDriving:
+            handleSwingDriving()
+            handleSwingTurning()
+
+            # Apply 
+            LeftMotors.spin(FORWARD, lVel * voltMultiplier * speedMultiplier, VOLT)
+            RightMotors.spin(FORWARD, RVel * voltMultiplier * speedMultiplier, VOLT)
         else:
-            handleDrivetrainDriving()
-            handleDrivetrainTurning()
-    
-        # Use Drive Variables
-        LeftMotors.spin(FORWARD, LVel * VoltMultiplier * SpeedMultiplier, VOLT)
-        RightMotors.spin(FORWARD, RVel * VoltMultiplier * SpeedMultiplier, VOLT)
+            handledrivetrainDriving()
+            handledrivetrainTurning()
+
+            # If both of the controller sticks are in the neutral position, stop moving.
+            if (cAxisTurn < 0.1 and cAxisTurn > -0.1 and cAxisDrive > -0.1 and cAxisDrive < 0.1):
+                drivetrain.stop()
 
         wait(10, MSEC)
 
@@ -233,9 +239,9 @@ def main():
     RightMotors.set_velocity(100, PERCENT)
     LeftMotors.set_velocity(100, PERCENT)
 
-    Drivetrain.set_drive_velocity(100 * SpeedMultiplier, PERCENT)
-    Drivetrain.set_turn_velocity(100 * SpeedMultiplier, PERCENT)
-    Drivetrain.set_stopping(COAST)
+    drivetrain.set_drive_velocity(100 * speedMultiplier, PERCENT)
+    drivetrain.set_turn_velocity(100 * speedMultiplier, PERCENT)
+    drivetrain.set_stopping(COAST)
 
     brainUserInterface()
 
